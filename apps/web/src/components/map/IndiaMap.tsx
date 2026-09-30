@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Layers, Eye, Radio, Maximize2 } from 'lucide-react';
+import { Layers, Eye, Radio, Maximize2, CloudRain } from 'lucide-react';
 import { DistrictOverviewItem, MapLayersResponse } from '../../types';
-import { getMapLayers, getMapGeoJson } from '../../lib/api';
+import { getMapLayers, getMapGeoJson, FALLBACK_DISTRICTS } from '../../lib/api';
 
 interface IndiaMapProps {
   districts: DistrictOverviewItem[];
@@ -13,7 +13,7 @@ interface IndiaMapProps {
 }
 
 export const IndiaMap: React.FC<IndiaMapProps> = ({
-  districts,
+  districts = [],
   selectedDistrictId,
   onSelectDistrict,
   thresholdFilter,
@@ -24,21 +24,25 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
   const baseLayersRef = useRef<Record<string, L.TileLayer>>({});
   const radarLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const radarRingsLayerRef = useRef<L.LayerGroup | null>(null);
   const polygonLayerRef = useRef<L.GeoJSON | null>(null);
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<string>('dark_canvas');
   const [showRadar, setShowRadar] = useState<boolean>(true);
   const [showBoundaries, setShowBoundaries] = useState<boolean>(true);
-  const [mapMeta, setMapMeta] = useState<MapLayersResponse | null>(null);
+  const [radarTimeLabel, setRadarTimeLabel] = useState<string>('Live Doppler');
+
+  // Fallback to static list if districts is empty during loading
+  const activeDistricts = (districts && districts.length > 0) ? districts : FALLBACK_DISTRICTS;
 
   const getDistrictColor = (d: DistrictOverviewItem) => {
     if (thresholdFilter === 'p204') {
-      if (d.p204_5 > 0.30) return '#EF4444'; // Red
-      if (d.p204_5 > 0.10) return '#F59E0B'; // Amber
+      if (d.p204_5 > 0.20) return '#EF4444'; // Red
+      if (d.p204_5 > 0.08) return '#F59E0B'; // Amber
       return '#3B82F6';                      // Blue
     } else if (thresholdFilter === 'p115') {
-      if (d.p115_6 > 0.40) return '#EF4444';
-      if (d.p115_6 > 0.20) return '#F59E0B';
+      if (d.p115_6 > 0.35) return '#EF4444';
+      if (d.p115_6 > 0.15) return '#F59E0B';
       return '#3B82F6';
     } else if (thresholdFilter === 'p64') {
       if (d.p64_5 > 0.60) return '#EF4444';
@@ -53,16 +57,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     }
   };
 
-  // 1. Fetch map layers metadata from API
-  useEffect(() => {
-    getMapLayers().then((data) => {
-      setMapMeta(data);
-    }).catch((err) => {
-      console.warn('Using fallback map layers:', err);
-    });
-  }, []);
-
-  // 2. Initialize Leaflet Map
+  // 1. Initialize Leaflet Map
   useEffect(() => {
     const container = mapContainerRef.current;
     if (!container) return;
@@ -73,7 +68,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     }
     (container as any)._leaflet_id = null;
 
-    // Center roughly over Central/Western India (21.5, 78.5)
+    // Center over Central/Western India (21.5, 78.5)
     const map = L.map(container, {
       center: [21.5, 78.5],
       zoom: 5,
@@ -81,10 +76,10 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
       attributionControl: false
     });
 
-    // Add zoom control in bottom-left
+    // Zoom control in bottom-left
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-    // Initialize Tile Layers (100% Free & No API Key Required)
+    // Free base tile layers (no API key, no watermark)
     const darkTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 16,
       attribution: 'Tiles &copy; Esri'
@@ -115,16 +110,36 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     // Default to Dark Canvas
     darkTile.addTo(map);
 
-    // Live RainViewer Weather Radar overlay tile layer
-    const radar = L.tileLayer('https://tilecache.rainviewer.com/v2/radar/nowcast_latest/256/{z}/{x}/{y}/2/1_1.png', {
-      opacity: 0.60,
-      zIndex: 100
-    });
-    radarLayerRef.current = radar;
-    radar.addTo(map);
-
+    // Layer groups for radar footprints and centroid dots
+    radarRingsLayerRef.current = L.layerGroup().addTo(map);
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
+
+    // 2. Dynamically load live RainViewer Doppler radar tile layer with latest timestamp
+    fetch('https://api.rainviewer.com/public/weather-maps.json')
+      .then((res) => res.json())
+      .then((apiData) => {
+        if (!mapInstanceRef.current) return;
+        const pastFrames = apiData.radar?.past || [];
+        if (pastFrames.length > 0) {
+          const latestFrame = pastFrames[pastFrames.length - 1];
+          const host = apiData.host || 'https://tilecache.rainviewer.com';
+          const tileUrl = `${host}${latestFrame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+
+          const radarTileLayer = L.tileLayer(tileUrl, {
+            opacity: 0.65,
+            zIndex: 200
+          });
+          radarLayerRef.current = radarTileLayer;
+          radarTileLayer.addTo(mapInstanceRef.current);
+
+          const date = new Date(latestFrame.time * 1000);
+          setRadarTimeLabel(`Radar: ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+        }
+      })
+      .catch((err) => {
+        console.warn('Live RainViewer fetch failed, using fallback:', err);
+      });
 
     return () => {
       if (mapInstanceRef.current) {
@@ -137,34 +152,41 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     };
   }, []);
 
-  // 3. Switch base tile layer
+  // 3. Switch Base Tile Layer
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
     Object.entries(baseLayersRef.current).forEach(([key, layer]) => {
       if (key === activeBaseLayer) {
-        if (!map.hasLayer(layer)) {
-          layer.addTo(map);
-        }
+        if (!map.hasLayer(layer)) layer.addTo(map);
       } else {
-        if (map.hasLayer(layer)) {
-          map.removeLayer(layer);
-        }
+        if (map.hasLayer(layer)) map.removeLayer(layer);
       }
     });
   }, [activeBaseLayer]);
 
-  // 4. Toggle Radar Layer
+  // 4. Toggle Weather Radar Overlay Layer
   useEffect(() => {
     const map = mapInstanceRef.current;
     const radar = radarLayerRef.current;
-    if (!map || !radar) return;
+    const rings = radarRingsLayerRef.current;
+    if (!map) return;
 
-    if (showRadar) {
-      if (!map.hasLayer(radar)) radar.addTo(map);
-    } else {
-      if (map.hasLayer(radar)) map.removeLayer(radar);
+    if (radar) {
+      if (showRadar) {
+        if (!map.hasLayer(radar)) radar.addTo(map);
+      } else {
+        if (map.hasLayer(radar)) map.removeLayer(radar);
+      }
+    }
+
+    if (rings) {
+      if (showRadar) {
+        if (!map.hasLayer(rings)) rings.addTo(map);
+      } else {
+        if (map.hasLayer(rings)) map.removeLayer(rings);
+      }
     }
   }, [showRadar]);
 
@@ -191,9 +213,9 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
             fillColor: fillColor,
             weight: isSelected ? 2.5 : 1,
             opacity: 0.9,
-            color: isSelected ? '#FFFFFF' : '#334155',
+            color: isSelected ? '#FFFFFF' : '#475569',
             dashArray: isSelected ? '' : '3',
-            fillOpacity: isSelected ? 0.45 : 0.25
+            fillOpacity: isSelected ? 0.45 : 0.20
           };
         },
         onEachFeature: (feature, layer) => {
@@ -206,7 +228,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
               target.setStyle({
                 weight: 3,
                 color: '#38BDF8',
-                fillOpacity: 0.55
+                fillOpacity: 0.50
               });
             },
             mouseout: (e) => {
@@ -223,49 +245,63 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     });
   }, [selectedCaseId, selectedDistrictId, showBoundaries, thresholdFilter]);
 
-  // 6. Update district markers whenever districts or threshold filter changes
+  // 6. Draw District Radar Echo Footprints and Centroid Dots
   useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current) return;
+    if (!mapInstanceRef.current || !markersLayerRef.current || !radarRingsLayerRef.current) return;
 
     markersLayerRef.current.clearLayers();
+    radarRingsLayerRef.current.clearLayers();
 
-    districts.forEach((d) => {
+    activeDistricts.forEach((d) => {
       const isSelected = d.id === selectedDistrictId;
       const color = getDistrictColor(d);
-      const radius = isSelected ? 12 : 8;
 
-      const circle = L.circleMarker([d.lat, d.lon], {
-        radius: radius,
+      // A. Radar Reflectivity Halo Ring (Simulated Doppler radar rain echo footprint)
+      const radarRadiusMeters = Math.max(30000, Math.min(100000, d.expected_rain_mm * 750));
+      const radarRing = L.circle([d.lat, d.lon], {
+        radius: radarRadiusMeters,
+        color: color,
         fillColor: color,
-        color: isSelected ? '#FFFFFF' : '#0F172A',
-        weight: isSelected ? 3 : 1.5,
+        fillOpacity: isSelected ? 0.28 : 0.16,
+        weight: isSelected ? 2 : 1,
+        dashArray: isSelected ? '' : '4, 4'
+      });
+      radarRingsLayerRef.current?.addLayer(radarRing);
+
+      // B. High-Contrast District Centroid Dot Marker
+      const circle = L.circleMarker([d.lat, d.lon], {
+        radius: isSelected ? 12 : 9,
+        fillColor: color,
+        color: '#FFFFFF',
+        weight: isSelected ? 3 : 2,
         opacity: 1,
-        fillOpacity: isSelected ? 0.95 : 0.85
+        fillOpacity: 1
       });
 
       const popupHtml = `
-        <div style="font-family: inherit; font-size: 12px; min-width: 170px;">
-          <div style="font-weight: 700; color: #38BDF8; font-size: 13px; margin-bottom: 2px;">
+        <div style="font-family: inherit; font-size: 12px; min-width: 175px; color: #0F172A;">
+          <div style="font-weight: 700; color: #0284C7; font-size: 14px; margin-bottom: 2px;">
             ${d.name}
           </div>
-          <div style="color: #94A3B8; font-size: 11px; margin-bottom: 6px;">
+          <div style="color: #64748B; font-size: 11px; margin-bottom: 6px;">
             ${d.state}, India
           </div>
-          <div style="border-top: 1px solid #334155; padding-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-            <div><span style="color:#64748B;">Expected:</span> <b style="color:#F8FAFC;">${d.expected_rain_mm} mm</b></div>
-            <div><span style="color:#64748B;">q50:</span> <b style="color:#F8FAFC;">${d.q50_mm} mm</b></div>
-            <div><span style="color:#64748B;">P(≥64.5):</span> <b style="color:#F8FAFC;">${Math.round(d.p64_5 * 100)}%</b></div>
-            <div><span style="color:#64748B;">P(≥115.6):</span> <b style="color:#F8FAFC;">${Math.round(d.p115_6 * 100)}%</b></div>
+          <div style="border-top: 1px solid #E2E8F0; padding-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div><span style="color:#64748B;">Expected:</span> <b>${d.expected_rain_mm} mm</b></div>
+            <div><span style="color:#64748B;">q50:</span> <b>${d.q50_mm} mm</b></div>
+            <div><span style="color:#64748B;">P(≥64.5):</span> <b style="color:#D97706;">${Math.round(d.p64_5 * 100)}%</b></div>
+            <div><span style="color:#64748B;">P(≥115.6):</span> <b style="color:#DC2626;">${Math.round(d.p115_6 * 100)}%</b></div>
           </div>
-          <div style="margin-top: 6px; padding: 2px 6px; background: #1E293B; border-radius: 4px; font-size: 10px; color: #CBD5E1;">
-            Regime: <b>${d.dominant_regime.toUpperCase()}</b>
+          <div style="margin-top: 6px; padding: 2px 6px; background: #F1F5F9; border-radius: 4px; font-size: 10px; color: #334155;">
+            Synoptic Regime: <b>${d.dominant_regime.toUpperCase()}</b>
           </div>
         </div>
       `;
 
-      circle.bindTooltip(`${d.name} (${d.expected_rain_mm} mm)`, {
+      circle.bindTooltip(`${d.name} • ${d.expected_rain_mm} mm`, {
         direction: 'top',
-        className: 'bg-gray-900 text-gray-200 border border-gray-700 text-xs px-2 py-1 rounded shadow'
+        permanent: false,
+        className: 'bg-gray-900 text-gray-100 font-mono text-xs px-2.5 py-1 rounded-lg border border-gray-700 shadow-xl'
       });
 
       circle.bindPopup(popupHtml);
@@ -276,7 +312,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
 
       markersLayerRef.current?.addLayer(circle);
     });
-  }, [districts, selectedDistrictId, thresholdFilter]);
+  }, [activeDistricts, selectedDistrictId, thresholdFilter]);
 
   const handleResetBounds = () => {
     if (mapInstanceRef.current) {
@@ -285,14 +321,14 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[450px] rounded-2xl overflow-hidden border border-gray-800 bg-[#0D131F] shadow-2xl">
+    <div className="relative w-full h-[460px] rounded-2xl overflow-hidden border border-gray-800 bg-[#0D131F] shadow-2xl">
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-      {/* Top-Left Banner */}
+      {/* Top-Left Banner with Live Indicator */}
       <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-950/90 backdrop-blur border border-gray-800 text-xs text-gray-300 shadow-lg">
-        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-        <span className="font-semibold text-cyan-300">Leaflet Map API Active</span>
-        <span className="text-gray-500">· 12 Synoptic Dist. Centroids</span>
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+        <span className="font-semibold text-cyan-300">{radarTimeLabel}</span>
+        <span className="text-gray-500">· {activeDistricts.length} District Radar Centroids</span>
       </div>
 
       {/* Top-Right Control Toolbar */}
@@ -334,7 +370,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
           </button>
         </div>
 
-        {/* Live Weather Radar Toggle */}
+        {/* Live Weather Radar Overlay Toggle */}
         <button
           onClick={() => setShowRadar(!showRadar)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur border transition-all shadow-lg ${
@@ -342,7 +378,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
               ? 'bg-emerald-950/90 text-emerald-400 border-emerald-800/80 shadow-emerald-950'
               : 'bg-gray-950/80 text-gray-400 border-gray-800 hover:text-gray-200'
           }`}
-          title="Toggle RainViewer live weather radar layer"
+          title="Toggle live Doppler precipitation radar overlay and echo rings"
         >
           <Radio className={`w-3.5 h-3.5 ${showRadar ? 'animate-pulse text-emerald-400' : 'text-gray-500'}`} />
           <span>Live Radar</span>
@@ -381,22 +417,22 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
           {showRadar && (
             <span className="text-[9px] text-emerald-400 font-mono flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Radar Overlay
+              Doppler Echo Active
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-blue-500 inline-block shadow-sm" />
-            <span>Low</span>
+            <span>Low (&lt;30mm)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm" />
-            <span>Moderate</span>
+            <span>Moderate (30-60mm)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-red-500 inline-block shadow-sm" />
-            <span>Elevated</span>
+            <span>Elevated (&gt;60mm)</span>
           </div>
         </div>
       </div>

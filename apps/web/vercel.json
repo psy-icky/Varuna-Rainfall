@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/leaf/:path*",
+      "destination": "https://varuna-rainfall.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://varuna-rainfall.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://varuna-rainfall.onrender.com/api/v1/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
