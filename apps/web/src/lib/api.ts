@@ -8,6 +8,13 @@ import {
   MapLayersResponse,
   DistrictsGeoJsonResponse
 } from '../types';
+import {
+  buildMockForecastPacket,
+  buildMockVerification,
+  buildMockTrust,
+  buildMockAudit,
+  setSimulatedFault
+} from './mockData';
 
 const RENDER_BACKEND = 'https://varuna-rainfall.onrender.com';
 const isBrowser = typeof window !== 'undefined';
@@ -117,40 +124,70 @@ export async function getDistricts(caseId: string = 'case_lps_001'): Promise<Dis
   }
 }
 
-export async function getDistrictForecast(districtId: string, caseId: string = 'case_lps_001'): Promise<ForecastPacket> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/districts/${encodeURIComponent(districtId)}/forecast?case_id=${encodeURIComponent(caseId)}`);
-  return handleResponse<ForecastPacket>(res);
+export async function getDistrictForecast(districtId: string = 'mh_nashik', caseId: string = 'case_lps_001'): Promise<ForecastPacket> {
+  const fallback = buildMockForecastPacket(districtId, caseId);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/districts/${encodeURIComponent(districtId)}/forecast?case_id=${encodeURIComponent(caseId)}`);
+    return await handleResponse<ForecastPacket>(res, fallback);
+  } catch (_) {
+    return fallback;
+  }
 }
 
 export async function getVerification(caseId: string = 'case_lps_001', thresholdMm: number = 64.5): Promise<VerificationResponse> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/verification/${encodeURIComponent(caseId)}?threshold_mm=${thresholdMm}`);
-  return handleResponse<VerificationResponse>(res);
+  const fallback = buildMockVerification(caseId, thresholdMm);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/verification/${encodeURIComponent(caseId)}?threshold_mm=${thresholdMm}`);
+    return await handleResponse<VerificationResponse>(res, fallback);
+  } catch (_) {
+    return fallback;
+  }
 }
 
 export async function getTrust(forecastId: string): Promise<TrustResponse> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/trust/${encodeURIComponent(forecastId)}`);
-  return handleResponse<TrustResponse>(res);
+  const fallback = buildMockTrust(forecastId);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/trust/${encodeURIComponent(forecastId)}`);
+    return await handleResponse<TrustResponse>(res, fallback);
+  } catch (_) {
+    return fallback;
+  }
 }
 
 export async function getAudit(forecastId: string): Promise<AuditPacketResponse> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/audit/${encodeURIComponent(forecastId)}`);
-  return handleResponse<AuditPacketResponse>(res);
+  const fallback = buildMockAudit(forecastId);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/audit/${encodeURIComponent(forecastId)}`);
+    return await handleResponse<AuditPacketResponse>(res, fallback);
+  } catch (_) {
+    return fallback;
+  }
 }
 
 export async function injectFault(fault: string): Promise<{ status: string; active_fault: string }> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/demo/fault`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fault })
-  });
-  return handleResponse<{ status: string; active_fault: string }>(res);
+  setSimulatedFault(fault);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/demo/fault`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fault })
+    });
+    return await handleResponse<{ status: string; active_fault: string }>(res, { status: 'success', active_fault: fault });
+  } catch (_) {
+    return { status: 'success', active_fault: fault };
+  }
 }
 
 export async function resetDemo(): Promise<{ status: string }> {
-  const res = await fetch(`${BASE_URL}${PREFIX}/demo/reset`, {
-    method: 'POST'
-  });
-  return handleResponse<{ status: string }>(res);
+  setSimulatedFault(null);
+  try {
+    const res = await fetch(`${BASE_URL}${PREFIX}/demo/reset`, {
+      method: 'POST'
+    });
+    return await handleResponse<{ status: string }>(res, { status: 'success' });
+  } catch (_) {
+    return { status: 'success' };
+  }
 }
 
 export async function getMapLayers(): Promise<MapLayersResponse> {
