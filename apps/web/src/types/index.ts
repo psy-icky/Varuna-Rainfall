@@ -92,6 +92,10 @@ export interface DistrictOverviewItem {
   state: string;
   lat: number;
   lon: number;
+  geometry_geojson?: {
+    type: string;
+    coordinates: any;
+  };
   expected_rain_mm: number;
   q50_mm: number;
   p64_5: number;

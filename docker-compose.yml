@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: varuna_api
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DEMO_MODE=true
+      - DATA_QUALITY=synthetic_demo
+      - SUPABASE_URL=${SUPABASE_URL:-https://qowhvxjsynxqjobibkcv.supabase.co}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: varuna_web
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped

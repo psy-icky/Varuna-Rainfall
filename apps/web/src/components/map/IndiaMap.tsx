@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Layers, Eye, Radio, Maximize2, CloudRain } from 'lucide-react';
+import { Layers, Eye, Radio, Maximize2, CloudRain, MapPin } from 'lucide-react';
 import { DistrictOverviewItem, MapLayersResponse } from '../../types';
 import { getMapLayers, getMapGeoJson, FALLBACK_DISTRICTS } from '../../lib/api';
 
@@ -23,6 +23,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const baseLayersRef = useRef<Record<string, L.TileLayer>>({});
   const radarLayerRef = useRef<L.TileLayer | null>(null);
+  const polygonsLayerRef = useRef<L.LayerGroup | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const radarRingsLayerRef = useRef<L.LayerGroup | null>(null);
   const polygonLayerRef = useRef<L.GeoJSON | null>(null);
@@ -110,7 +111,8 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     // Default to Dark Canvas
     darkTile.addTo(map);
 
-    // Layer groups for radar footprints and centroid dots
+    // Layer groups for district polygons, radar footprints, and centroid dots
+    polygonsLayerRef.current = L.layerGroup().addTo(map);
     radarRingsLayerRef.current = L.layerGroup().addTo(map);
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
@@ -245,10 +247,11 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     });
   }, [selectedCaseId, selectedDistrictId, showBoundaries, thresholdFilter]);
 
-  // 6. Draw District Radar Echo Footprints and Centroid Dots
+  // 6. Draw District Polygons, Radar Echo Footprints, and Centroid Dots
   useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current || !radarRingsLayerRef.current) return;
+    if (!mapInstanceRef.current || !markersLayerRef.current || !radarRingsLayerRef.current || !polygonsLayerRef.current) return;
 
+    polygonsLayerRef.current.clearLayers();
     markersLayerRef.current.clearLayers();
     radarRingsLayerRef.current.clearLayers();
 
@@ -256,7 +259,43 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
       const isSelected = d.id === selectedDistrictId;
       const color = getDistrictColor(d);
 
-      // A. Radar Reflectivity Halo Ring (Simulated Doppler radar rain echo footprint)
+      // A. Render GeoJSON Polygon if available
+      if (d.geometry_geojson && d.geometry_geojson.coordinates) {
+        const ring = d.geometry_geojson.coordinates[0];
+        const latLngs: L.LatLngExpression[] = ring.map(([lon, lat]: [number, number]) => [lat, lon]);
+
+        const polygon = L.polygon(latLngs, {
+          color: isSelected ? '#06B6D4' : color,
+          weight: isSelected ? 3 : 1.5,
+          opacity: isSelected ? 1 : 0.7,
+          fillColor: color,
+          fillOpacity: isSelected ? 0.40 : 0.20
+        });
+
+        polygon.on('click', () => {
+          onSelectDistrict(d.id);
+        });
+
+        polygon.on('mouseover', () => {
+          polygon.setStyle({
+            weight: 3,
+            fillOpacity: 0.50
+          });
+        });
+
+        polygon.on('mouseout', () => {
+          if (!isSelected) {
+            polygon.setStyle({
+              weight: 1.5,
+              fillOpacity: 0.20
+            });
+          }
+        });
+
+        polygonsLayerRef.current?.addLayer(polygon);
+      }
+
+      // B. Radar Reflectivity Halo Ring (Simulated Doppler radar rain echo footprint)
       const radarRadiusMeters = Math.max(30000, Math.min(100000, d.expected_rain_mm * 750));
       const radarRing = L.circle([d.lat, d.lon], {
         radius: radarRadiusMeters,
@@ -268,7 +307,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
       });
       radarRingsLayerRef.current?.addLayer(radarRing);
 
-      // B. High-Contrast District Centroid Dot Marker
+      // C. High-Contrast District Centroid Dot Marker
       const circle = L.circleMarker([d.lat, d.lon], {
         radius: isSelected ? 12 : 9,
         fillColor: color,
@@ -314,9 +353,23 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     });
   }, [activeDistricts, selectedDistrictId, thresholdFilter]);
 
-  const handleResetBounds = () => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView([21.5, 78.5], 5, { animate: true });
+  const fitIndiaBounds = () => {
+    if (!mapInstanceRef.current || activeDistricts.length === 0) return;
+    const bounds = L.latLngBounds(activeDistricts.map((d) => [d.lat, d.lon]));
+    mapInstanceRef.current.fitBounds(bounds.pad(0.18), {
+      animate: true,
+      duration: 0.8
+    });
+  };
+
+  const zoomToSelected = () => {
+    if (!mapInstanceRef.current) return;
+    const current = activeDistricts.find((d) => d.id === selectedDistrictId);
+    if (current) {
+      mapInstanceRef.current.flyTo([current.lat, current.lon], 7, {
+        animate: true,
+        duration: 0.8
+      });
     }
   };
 
@@ -324,11 +377,31 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
     <div className="relative w-full h-[460px] rounded-2xl overflow-hidden border border-gray-800 bg-[#0D131F] shadow-2xl">
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-      {/* Top-Left Banner with Live Indicator */}
-      <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-950/90 backdrop-blur border border-gray-800 text-xs text-gray-300 shadow-lg">
-        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-        <span className="font-semibold text-cyan-300">{radarTimeLabel}</span>
-        <span className="text-gray-500">· {activeDistricts.length} District Radar Centroids</span>
+      {/* Top-Left Banner with Live Indicator & Camera controls */}
+      <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-950/90 backdrop-blur border border-gray-800 text-xs text-gray-300 shadow-lg">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+          <span className="font-semibold text-cyan-300">{radarTimeLabel}</span>
+          <span className="text-gray-500">· {activeDistricts.length} Districts</span>
+        </div>
+
+        <button
+          onClick={fitIndiaBounds}
+          title="Fit All Indian Districts"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-950/90 hover:bg-gray-800 backdrop-blur border border-gray-800 text-xs text-gray-200 transition-colors shadow-lg"
+        >
+          <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Fit India</span>
+        </button>
+
+        <button
+          onClick={zoomToSelected}
+          title="Focus on Selected District"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-950/90 hover:bg-gray-800 backdrop-blur border border-gray-800 text-xs text-gray-200 transition-colors shadow-lg"
+        >
+          <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Focus</span>
+        </button>
       </div>
 
       {/* Top-Right Control Toolbar */}
@@ -400,7 +473,7 @@ export const IndiaMap: React.FC<IndiaMapProps> = ({
 
         {/* Reset View Button */}
         <button
-          onClick={handleResetBounds}
+          onClick={fitIndiaBounds}
           className="p-1.5 rounded-xl bg-gray-950/90 backdrop-blur border border-gray-800 text-gray-300 hover:text-cyan-400 transition-colors shadow-lg"
           title="Center map on India"
         >

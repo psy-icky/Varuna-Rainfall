@@ -28,18 +28,18 @@ class ForecastOrchestrator:
 
         # Static district master data
         self.districts: Dict[str, Dict[str, Any]] = {
-            "mh_mumbai_suburban": {"id": "mh_mumbai_suburban", "name": "Mumbai Suburban", "state": "Maharashtra", "lat": 19.08, "lon": 72.88, "elevation": 14.0, "coast_distance_km": 5.0, "base_rain_factor": 1.15},
-            "mh_nashik": {"id": "mh_nashik", "name": "Nashik", "state": "Maharashtra", "lat": 20.00, "lon": 73.78, "elevation": 560.0, "coast_distance_km": 140.0, "base_rain_factor": 1.00},
-            "mh_pune": {"id": "mh_pune", "name": "Pune", "state": "Maharashtra", "lat": 18.52, "lon": 73.85, "elevation": 560.0, "coast_distance_km": 110.0, "base_rain_factor": 0.85},
-            "mh_nagpur": {"id": "mh_nagpur", "name": "Nagpur", "state": "Maharashtra", "lat": 21.14, "lon": 79.08, "elevation": 310.0, "coast_distance_km": 680.0, "base_rain_factor": 1.20},
-            "od_cuttack": {"id": "od_cuttack", "name": "Cuttack", "state": "Odisha", "lat": 20.46, "lon": 85.88, "elevation": 36.0, "coast_distance_km": 60.0, "base_rain_factor": 1.35},
-            "od_puri": {"id": "od_puri", "name": "Puri", "state": "Odisha", "lat": 19.81, "lon": 85.83, "elevation": 5.0, "coast_distance_km": 2.0, "base_rain_factor": 1.40},
-            "cg_raigarh": {"id": "cg_raigarh", "name": "Raigarh", "state": "Chhattisgarh", "lat": 21.90, "lon": 83.40, "elevation": 215.0, "coast_distance_km": 420.0, "base_rain_factor": 1.30},
-            "mp_jabalpur": {"id": "mp_jabalpur", "name": "Jabalpur", "state": "Madhya Pradesh", "lat": 23.18, "lon": 79.98, "elevation": 411.0, "coast_distance_km": 720.0, "base_rain_factor": 1.25},
-            "gj_surat": {"id": "gj_surat", "name": "Surat", "state": "Gujarat", "lat": 21.17, "lon": 72.83, "elevation": 13.0, "coast_distance_km": 15.0, "base_rain_factor": 0.95},
-            "kl_ernakulam": {"id": "kl_ernakulam", "name": "Ernakulam", "state": "Kerala", "lat": 9.98, "lon": 76.30, "elevation": 4.0, "coast_distance_km": 6.0, "base_rain_factor": 1.25},
-            "kl_wayanad": {"id": "kl_wayanad", "name": "Wayanad", "state": "Kerala", "lat": 11.68, "lon": 76.13, "elevation": 820.0, "coast_distance_km": 55.0, "base_rain_factor": 1.65},
-            "uk_dehradun": {"id": "uk_dehradun", "name": "Dehradun", "state": "Uttarakhand", "lat": 30.31, "lon": 78.03, "elevation": 640.0, "coast_distance_km": 1100.0, "base_rain_factor": 1.10}
+            "mh_mumbai_suburban": {"id": "mh_mumbai_suburban", "name": "Mumbai Suburban", "state": "Maharashtra", "lat": 19.08, "lon": 72.88, "elevation": 14.0, "coast_distance_km": 5.0, "base_rain_factor": 1.15, "geometry_geojson": {"type": "Polygon", "coordinates": [[[72.78, 19.25], [72.98, 19.25], [72.98, 18.98], [72.78, 18.98], [72.78, 19.25]]]}},
+            "mh_nashik": {"id": "mh_nashik", "name": "Nashik", "state": "Maharashtra", "lat": 20.00, "lon": 73.78, "elevation": 560.0, "coast_distance_km": 140.0, "base_rain_factor": 1.00, "geometry_geojson": {"type": "Polygon", "coordinates": [[[73.50, 20.25], [74.15, 20.25], [74.15, 19.70], [73.50, 19.70], [73.50, 20.25]]]}},
+            "mh_pune": {"id": "mh_pune", "name": "Pune", "state": "Maharashtra", "lat": 18.52, "lon": 73.85, "elevation": 560.0, "coast_distance_km": 110.0, "base_rain_factor": 0.85, "geometry_geojson": {"type": "Polygon", "coordinates": [[[73.60, 18.75], [74.20, 18.75], [74.20, 18.30], [73.60, 18.30], [73.60, 18.75]]]}},
+            "mh_nagpur": {"id": "mh_nagpur", "name": "Nagpur", "state": "Maharashtra", "lat": 21.14, "lon": 79.08, "elevation": 310.0, "coast_distance_km": 680.0, "base_rain_factor": 1.20, "geometry_geojson": {"type": "Polygon", "coordinates": [[[78.75, 21.45], [79.40, 21.45], [79.40, 20.85], [78.75, 20.85], [78.75, 21.45]]]}},
+            "od_cuttack": {"id": "od_cuttack", "name": "Cuttack", "state": "Odisha", "lat": 20.46, "lon": 85.88, "elevation": 36.0, "coast_distance_km": 60.0, "base_rain_factor": 1.35, "geometry_geojson": {"type": "Polygon", "coordinates": [[[85.60, 20.70], [86.20, 20.70], [86.20, 20.25], [85.60, 20.25], [85.60, 20.70]]]}},
+            "od_puri": {"id": "od_puri", "name": "Puri", "state": "Odisha", "lat": 19.81, "lon": 85.83, "elevation": 5.0, "coast_distance_km": 2.0, "base_rain_factor": 1.40, "geometry_geojson": {"type": "Polygon", "coordinates": [[[85.55, 20.05], [86.15, 20.05], [86.15, 19.65], [85.55, 19.65], [85.55, 20.05]]]}},
+            "cg_raigarh": {"id": "cg_raigarh", "name": "Raigarh", "state": "Chhattisgarh", "lat": 21.90, "lon": 83.40, "elevation": 215.0, "coast_distance_km": 420.0, "base_rain_factor": 1.30, "geometry_geojson": {"type": "Polygon", "coordinates": [[[83.10, 22.15], [83.75, 22.15], [83.75, 21.65], [83.10, 21.65], [83.10, 22.15]]]}},
+            "mp_jabalpur": {"id": "mp_jabalpur", "name": "Jabalpur", "state": "Madhya Pradesh", "lat": 23.18, "lon": 79.98, "elevation": 411.0, "coast_distance_km": 720.0, "base_rain_factor": 1.25, "geometry_geojson": {"type": "Polygon", "coordinates": [[[79.65, 23.45], [80.35, 23.45], [80.35, 22.90], [79.65, 22.90], [79.65, 23.45]]]}},
+            "gj_surat": {"id": "gj_surat", "name": "Surat", "state": "Gujarat", "lat": 21.17, "lon": 72.83, "elevation": 13.0, "coast_distance_km": 15.0, "base_rain_factor": 0.95, "geometry_geojson": {"type": "Polygon", "coordinates": [[[72.60, 21.40], [73.15, 21.40], [73.15, 20.95], [72.60, 20.95], [72.60, 21.40]]]}},
+            "kl_ernakulam": {"id": "kl_ernakulam", "name": "Ernakulam", "state": "Kerala", "lat": 9.98, "lon": 76.30, "elevation": 4.0, "coast_distance_km": 6.0, "base_rain_factor": 1.25, "geometry_geojson": {"type": "Polygon", "coordinates": [[[76.05, 10.25], [76.60, 10.25], [76.60, 9.75], [76.05, 9.75], [76.05, 10.25]]]}},
+            "kl_wayanad": {"id": "kl_wayanad", "name": "Wayanad", "state": "Kerala", "lat": 11.68, "lon": 76.13, "elevation": 820.0, "coast_distance_km": 55.0, "base_rain_factor": 1.65, "geometry_geojson": {"type": "Polygon", "coordinates": [[[75.85, 11.95], [76.40, 11.95], [76.40, 11.45], [75.85, 11.45], [75.85, 11.95]]]}},
+            "uk_dehradun": {"id": "uk_dehradun", "name": "Dehradun", "state": "Uttarakhand", "lat": 30.31, "lon": 78.03, "elevation": 640.0, "coast_distance_km": 1100.0, "base_rain_factor": 1.10, "geometry_geojson": {"type": "Polygon", "coordinates": [[[77.70, 30.60], [78.35, 30.60], [78.35, 30.05], [77.70, 30.05], [77.70, 30.60]]]}}
         }
 
         # Five representative held-out demo cases
@@ -178,6 +178,7 @@ class ForecastOrchestrator:
                 state=d["state"],
                 lat=d["lat"],
                 lon=d["lon"],
+                geometry_geojson=d.get("geometry_geojson"),
                 expected_rain_mm=packet.expected_rain_mm,
                 q50_mm=packet.q50_mm,
                 p64_5=packet.p64_5,

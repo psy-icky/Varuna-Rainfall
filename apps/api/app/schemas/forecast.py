@@ -71,6 +71,7 @@ class DistrictOverviewItem(BaseModel):
     state: str
     lat: float
     lon: float
+    geometry_geojson: Optional[Dict[str, Any]] = None
     expected_rain_mm: float
     q50_mm: float
     p64_5: float

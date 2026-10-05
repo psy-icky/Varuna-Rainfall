@@ -37,7 +37,12 @@ htmlcov/
 # Vite / React Build output
 dist/
 dist-ssr/
+apps/web/dist/
 *.local
+
+# Unpacked Update Archives
+SIH PRO 2-1/
+SIH PRO 2-1.zip
 
 # Ensure source files in lib are tracked
 !apps/web/src/lib/

@@ -1,0 +1,31 @@
+services:
+  # FastAPI Backend Service
+  - type: web
+    name: varuna-rainfall-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --app-dir apps/api --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: DEMO_MODE
+        value: "true"
+      - key: DATA_QUALITY
+        value: "synthetic_demo"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  # Static Web Frontend
+  - type: web
+    name: varuna-rainfall-web
+    runtime: static
+    buildCommand: cd apps/web && npm install && npm run build
+    staticPublishPath: ./apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
